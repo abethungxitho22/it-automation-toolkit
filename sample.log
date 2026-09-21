@@ -1,0 +1,11 @@
+2026-09-21 08:01:12 INFO 192.168.1.10 User jdoe logged in
+2026-09-21 08:05:44 WARNING 192.168.1.22 Disk usage at 85%
+2026-09-21 08:07:30 ERROR 10.0.0.5 Failed login for user admin
+2026-09-21 08:07:41 ERROR 10.0.0.5 Failed login for user admin
+2026-09-21 08:09:02 INFO 192.168.1.10 User jdoe opened report.pdf
+2026-09-22 09:15:00 CRITICAL 172.16.0.8 Database connection lost
+2026-09-22 09:16:10 INFO 192.168.1.35 Service restarted
+2026-09-22 09:20:55 ERROR 10.0.0.5 Failed login for user root
+2026-09-23 10:02:03 INFO 999.1.1.1 Invalid address in this line
+2026-09-23 10:30:00 WARNING 192.168.1.22 High memory usage
+2026-09-23 11:45:19 ERROR 203.0.113.50 Unauthorised access attempt blocked
