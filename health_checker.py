@@ -1,6 +1,7 @@
 import argparse
 import ctypes
 import logging
+import logging.handlers
 import platform
 import shutil
 import subprocess
@@ -26,16 +27,22 @@ def close_logging():
             logger.removeHandler(handler)
 
 
-def setup_logging(log_file=DEFAULT_LOG_FILE, verbose=False):
+def setup_logging(log_file=DEFAULT_LOG_FILE, verbose=False,
+                  max_bytes=1_000_000, backup_count=3):
     """Send log messages to a file. Returns True on success, False if the file can't be used.
 
     INFO and above are recorded normally; verbose=True adds DEBUG detail.
+    The log rotates: when the file reaches max_bytes it is renamed to
+    health_check.log.1 (and so on) and a fresh file is started. Only
+    backup_count old files are kept, so the log can never fill the disk.
     """
     close_logging()  # avoids duplicate handlers (and duplicate lines) on repeat calls
     logger.setLevel(logging.DEBUG if verbose else logging.INFO)
     logger.propagate = False
     try:
-        handler = logging.FileHandler(log_file, encoding="utf-8")
+        handler = logging.handlers.RotatingFileHandler(
+            log_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
+        )
     except OSError as error:
         print(f"Warning: could not open log file {log_file} ({error}). Continuing without it.",
               file=sys.stderr)
