@@ -1,0 +1,20 @@
+{
+  "base_directory": "toolkit_workspace",
+  "required_python": "3.8",
+  "folders": [
+    "logs",
+    "reports",
+    "backups",
+    "config"
+  ],
+  "files": [
+    {
+      "path": "config/settings.txt",
+      "content": "environment=development\nlog_level=INFO\ndisk_threshold=90\n"
+    },
+    {
+      "path": "README.txt",
+      "content": "This workspace was created by system_setup.py.\nEdit setup_config.json to change what gets created.\n"
+    }
+  ]
+}
