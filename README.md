@@ -136,13 +136,19 @@ Every run should end with a line such as `14/14 tests passed`. The tests use tem
 ## Project structure
 
 ```
-it-automation-toolkit/
+
+## Project structure
+
 ├── file_organiser.py
 ├── log_analyser.py
 ├── health_checker.py
 ├── test_file_organiser.py
 ├── test_log_analyser.py
 ├── test_health_checker.py
+├── performance_lab/
+├── system_setup.py
+├── setup_config.json
+├── test_system_setup.py
 ├── sample.log
 ├── .gitignore
 └── README.md
@@ -153,3 +159,107 @@ it-automation-toolkit/
 - **File organiser:** tidy shared drives and download folders.
 - **Log analyser:** spot repeated failed logins and suspicious IP addresses quickly.
 - **Health checker:** run on a schedule to catch full disks, high memory use or stopped services before users notice.
+
+## Week 3: Troubleshooting, Performance and Configuration Management
+
+### Troubleshooting and debugging
+
+During Week 3, deliberately broken Python scripts were investigated using a structured troubleshooting process:
+
+1. Reproduce the problem.
+2. Identify the error or unexpected behaviour.
+3. Trace the problem to its root cause.
+4. Apply a fix.
+5. Run tests to confirm the fix.
+6. Document the solution to help prevent the problem in future.
+
+The troubleshooting work covered Python errors, logging, testing, exception handling and system reliability.
+
+### Performance tuning
+
+The performance lab was used to identify slow or resource-intensive operations.
+
+The main improvements included:
+
+* Optimising slow Python operations.
+* Reducing unnecessary memory usage when processing large log files.
+* Changing the log reader to process the file line by line instead of loading the entire file into memory.
+* Adding log rotation so that log files do not grow indefinitely.
+
+For the memory optimisation test, the log analyser still found **30,000 errors**, while peak memory usage decreased from approximately **48.4 MB to 0.1 MB**.
+
+### Configuration management
+
+The project includes a configuration-management script:
+
+```text
+system_setup.py
+setup_config.json
+test_system_setup.py
+```
+
+The setup script creates and maintains a standard workspace containing:
+
+```text
+toolkit_workspace/
+├── logs/
+├── reports/
+├── backups/
+├── config/
+└── README.txt
+```
+
+The script is **idempotent**, meaning it can be run multiple times without unnecessarily changing an already correct configuration.
+
+Configuration drift was also tested by deleting `README.txt`. Running the setup script again detected the missing file and recreated it while leaving the other configured items unchanged.
+
+The configuration-management tests achieved:
+
+```text
+19/19 tests passed
+```
+
+### Cloud and virtual machine deployment
+
+The automation toolkit can be moved from a local Windows computer to a Linux virtual machine or cloud server.
+
+A possible deployment approach is:
+
+```text
+GitHub Repository
+       |
+       v
+Linux Virtual Machine / Cloud Server
+       |
+       v
+Python Environment
+       |
+       v
+Automation Scripts
+       |
+       +--> File Organisation
+       +--> Log Analysis
+       +--> System Health Checks
+       +--> Configuration Management
+       |
+       v
+Logs and Reports
+```
+
+On a cloud or virtual machine, the scripts could be scheduled to run automatically using a scheduler such as `cron` on Linux or a cloud-based scheduling service.
+
+The configuration file allows the environment to be recreated consistently, while log rotation helps prevent log files from growing indefinitely.
+
+### Scalability and reliability
+
+For a larger environment, the automation toolkit could be improved by:
+
+* Running scripts on multiple virtual machines.
+* Using scheduled jobs for regular health checks.
+* Storing logs and reports centrally.
+* Using cloud storage for backups.
+* Adding monitoring and alerting.
+* Using environment-specific configuration files.
+* Running automated tests before deployment.
+
+These improvements would make the automation solution easier to maintain and suitable for larger environments.

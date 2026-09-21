@@ -23,12 +23,13 @@ Record every slow or resource-heavy operation you investigate.
   starts a separate Windows program (tasklist) and waits while Windows collects
   a list of every running process. Disk and memory ask Windows one simple
   question directly, so they are almost instant.
-- **Could it be improved? How?** TODO: run `Measure-Command { tasklist }` and
-  `Measure-Command { tasklist /FI "IMAGENAME eq chrome.exe" /NH }` two or three
-  times each, then write: "tasklist took ___ ms and the filtered version took
-  ___ ms, so filtering (helped / made no real difference)." The process check
-  only runs when --process is used, so a default run is still fast. For a check
-  that runs once an hour, about 1.4 seconds is acceptable.
+- **Could it be improved? How?** I timed `tasklist` (1154 ms) against a filtered
+  `tasklist /FI "IMAGENAME eq chrome.exe"` (1032 ms) in PowerShell. The difference
+  is within normal run-to-run variation (my earlier measurements ranged from 1044
+  to 1825 ms), so filtering made no real difference. The cost is Windows collecting
+  information about every process, not the size of the output. The process check
+  only runs when --process is used, so a default run is still fast, and for a check
+  that runs once an hour, about 1.2 seconds is acceptable.
 
 ## slow1_duplicate_ips.py
 
@@ -48,8 +49,8 @@ Record every slow or resource-heavy operation you investigate.
 - **Why it is slow:** The highest reading never changes, but the script sorted
   4,000 numbers 4,000 times.
 - **Fix:** Worked out the highest reading once before the loop using max().
-- **After (time):** 0.00 seconds
-- **Still gives the same answer? Yes
+- **After (time):** 0.00 seconds.
+- **Still gives the same answer?** Yes, 31 high readings before and after.
 
 ## slow3_memory_reader.py
 
@@ -62,11 +63,14 @@ Record every slow or resource-heavy operation you investigate.
 - **After (time and peak memory):** About 0.9 seconds (no real change, within normal
   variation) and 0.1 MB peak memory.
 - **Still gives the same answer?** Yes, 30000 errors before and after.
+
 ## Reliability: the growing log file
 
 - **The problem:** health_check.log is appended to on every run and never
   shrinks. On a server running the checker regularly, it would eventually fill
   the disk, so the tool meant to warn about full disks could cause one.
-- **My fix:** TODO: describe the change you made to setup_logging().
-- **How I tested it:** TODO: for example, that all 19 tests still pass and how
-  you confirmed the log file stays capped.
+- **My fix:** Replaced FileHandler with RotatingFileHandler in setup_logging(), with a
+  1 MB limit and 3 backup files, so the log is capped at about 4 MB in total.
+- **How I tested it:** Added a test that uses a tiny size limit, writes 200 messages,
+  and checks that backup files appear, that only the allowed number are kept, and that
+  no file grows large. All 20 tests passed.
