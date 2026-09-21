@@ -139,6 +139,22 @@ def test_setup_logging_does_not_duplicate_handlers():
                          if isinstance(h, logging.FileHandler)]
         assert len(file_handlers) == 1
 
+def test_log_rotates_instead_of_growing_forever():
+    with temp_log_file() as log_path:
+        # Tiny limits so rotation happens quickly
+        setup_logging(log_path, max_bytes=500, backup_count=2)
+        for i in range(200):
+            health_checker.logger.info("Filler message number %d to fill the log file", i)
+        close_logging()
+
+        folder = os.path.dirname(log_path)
+        log_files = sorted(os.listdir(folder))
+        assert "test.log.1" in log_files                       # rotation happened
+        assert "test.log.3" not in log_files                   # only 2 backups kept
+        assert len(log_files) <= 3                             # test.log + 2 backups
+        for name in log_files:
+            assert os.path.getsize(os.path.join(folder, name)) < 1000   # nothing huge
+
 def test_unwritable_log_file_does_not_crash_the_script():
     # The folder does not exist, so the log file cannot be created
     result = main(quick_args("no_such_folder/health.log"))
