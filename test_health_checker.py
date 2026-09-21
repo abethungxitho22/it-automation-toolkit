@@ -1,10 +1,15 @@
+import argparse
+import logging
+import os
+import sys
+import tempfile
+from contextlib import contextmanager
 from unittest import mock
 
 import health_checker
 from health_checker import (check_disk, check_memory, check_ping, check_process,
-                            parse_args, percentage, main, run_command)
-import sys
-import argparse
+                            parse_args, percentage, main, run_command,
+                            setup_logging, close_logging)
 
 
 def expect_error(error_type, func, *args):
@@ -15,6 +20,23 @@ def expect_error(error_type, func, *args):
     raise AssertionError(f"Should have raised {error_type.__name__}")
 
 
+@contextmanager
+def temp_log_file():
+    """Give a log path inside a temporary folder, and release the file afterwards."""
+    with tempfile.TemporaryDirectory() as folder:
+        try:
+            yield os.path.join(folder, "test.log")
+        finally:
+            close_logging()  # Windows cannot delete a file that is still open
+
+
+def quick_args(log_path, *extra):
+    """Arguments for a fast, predictable run of main()."""
+    return ["--disk-path", ".", "--disk-threshold", "100", "--memory-threshold", "100",
+            "--log-file", log_path, *extra]
+
+
+# ------------------------------------------------------------------ checks
 def test_disk_ok_with_high_threshold():
     status, message = check_disk(".", 100)
     assert status is True and "Disk" in message
@@ -70,16 +92,57 @@ def test_percentage_validation():
 
 def test_parse_args_defaults_and_options():
     args = parse_args([])
-    assert args.disk_threshold == 90 and args.ping is None
-    args = parse_args(["--disk-threshold", "75", "--ping", "example.com"])
-    assert args.disk_threshold == 75 and args.ping == "example.com"
+    assert args.disk_threshold == 90 and args.ping is None and args.verbose is False
+    args = parse_args(["--disk-threshold", "75", "--ping", "example.com", "--verbose"])
+    assert args.disk_threshold == 75 and args.ping == "example.com" and args.verbose is True
 
 def test_bad_argument_exits():
     expect_error(SystemExit, parse_args, ["--disk-threshold", "999"])
 
 def test_main_exit_codes():
-    assert main(["--disk-path", ".", "--disk-threshold", "100", "--memory-threshold", "100"]) == 0
-    assert main(["--disk-path", "no/such/place"]) == 1
+    with temp_log_file() as log_path:
+        assert main(quick_args(log_path)) == 0
+        assert main(["--disk-path", "no/such/place", "--log-file", log_path]) == 1
+
+
+# ----------------------------------------------------------------- logging
+def test_log_file_records_start_and_finish():
+    with temp_log_file() as log_path:
+        main(quick_args(log_path))
+        close_logging()
+        text = open(log_path, encoding="utf-8").read()
+        assert "Health check started" in text
+        assert "Health check finished: 0 check(s) failed" in text
+
+def test_failed_check_is_logged_at_error_and_warning():
+    with temp_log_file() as log_path:
+        main(["--disk-path", "no/such/place", "--log-file", log_path])
+        close_logging()
+        text = open(log_path, encoding="utf-8").read()
+        assert "ERROR" in text and "Disk path not found" in text   # the cause
+        assert "WARNING" in text and "FAILED" in text              # the outcome
+
+def test_debug_only_appears_with_verbose():
+    with temp_log_file() as log_path:
+        main(quick_args(log_path, "--process", "python"))
+        close_logging()
+        assert "DEBUG" not in open(log_path, encoding="utf-8").read()
+        main(quick_args(log_path, "--process", "python", "--verbose"))
+        close_logging()
+        assert "DEBUG" in open(log_path, encoding="utf-8").read()
+
+def test_setup_logging_does_not_duplicate_handlers():
+    with temp_log_file() as log_path:
+        setup_logging(log_path)
+        setup_logging(log_path)
+        file_handlers = [h for h in health_checker.logger.handlers
+                         if isinstance(h, logging.FileHandler)]
+        assert len(file_handlers) == 1
+
+def test_unwritable_log_file_does_not_crash_the_script():
+    # The folder does not exist, so the log file cannot be created
+    result = main(quick_args("no_such_folder/health.log"))
+    assert result == 0
 
 
 if __name__ == "__main__":
