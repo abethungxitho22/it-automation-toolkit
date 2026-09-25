@@ -26,13 +26,15 @@ def test_get_category():
 
 def test_files_are_moved():
     with tempfile.TemporaryDirectory() as folder:
-        make_files(folder, ["a.png", "b.pdf", "c.xyz"])
+        (Path(folder) / "a.png").write_text("image content")
+        (Path(folder) / "b.pdf").write_text("pdf content")
+        (Path(folder) / "c.xyz").write_text("mystery content")
         moved, errors = organise_files(folder)
         assert len(moved) == 3 and errors == []
         assert (Path(folder) / "Images" / "a.png").exists()
         assert (Path(folder) / "Documents" / "b.pdf").exists()
         assert (Path(folder) / "Others" / "c.xyz").exists()
-
+        
 def test_dry_run_moves_nothing():
     with tempfile.TemporaryDirectory() as folder:
         make_files(folder, ["a.png"])

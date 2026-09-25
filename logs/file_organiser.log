@@ -1,0 +1,6 @@
+2026-09-25T16:56:18 | moved | bad file!.txt -> test_data\Documents\bad file!.txt
+2026-09-25T16:56:18 | moved | doc1.txt -> test_data\Documents\doc1.txt
+2026-09-25T16:56:18 | moved | photo.jpg -> test_data\Images\photo.jpg
+2026-09-25T16:56:18 | moved | report.pdf -> test_data\Documents\report.pdf
+2026-09-25T16:56:18 | error | bad file!.txt | Invalid filename (unsupported characters)
+2026-09-25T16:56:18 | error | doc2.txt | Duplicate of doc1.txt
