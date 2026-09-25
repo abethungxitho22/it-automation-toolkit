@@ -1,0 +1,19 @@
+==================================================
+IT AUTOMATION TOOLKIT - SUMMARY REPORT
+==================================================
+Date: 2026-09-25 21:14:45
+
+Checks performed:
+  - File organisation (file_organiser.py)
+  - Log analysis (log_analyser.py)
+  - System health check (health_checker.py)
+  - Data validation (data_validator.py)
+
+Problems detected:
+  - 1 duplicate file found in test_data
+  - 2 invalid records found in records.csv
+
+Recommended actions:
+  - Review and remove confirmed duplicate files
+  - Correct or remove invalid records before re-import
+==================================================
