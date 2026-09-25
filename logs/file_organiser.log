@@ -4,3 +4,4 @@
 2026-09-25T16:56:18 | moved | report.pdf -> test_data\Documents\report.pdf
 2026-09-25T16:56:18 | error | bad file!.txt | Invalid filename (unsupported characters)
 2026-09-25T16:56:18 | error | doc2.txt | Duplicate of doc1.txt
+2026-09-25T21:24:32 | moved | doc2.txt -> test_data\Documents\doc2.txt
