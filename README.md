@@ -1,8 +1,8 @@
 # IT Automation Toolkit
 
-A collection of Python command-line tools that automate everyday IT tasks: organising files, analysing log files, and checking system health.
+A collection of Python command-line tools that automate everyday IT tasks: organising files, analysing log files, checking system health, validating data, and generating reports.
 
-Built during the CAPACITI IT automation programme (Week 2: Operating-System Automation and GitHub).
+Built during the CAPACITI IT automation programme (Week 2: Operating-System Automation and GitHub; Week 4: Real-World Automation and Capstone Project).
 
 ## Tools
 
@@ -11,6 +11,9 @@ Built during the CAPACITI IT automation programme (Week 2: Operating-System Auto
 | `file_organiser.py` | Sorts the files in a folder into category subfolders (Images, Documents, Archives, and more) |
 | `log_analyser.py` | Extracts errors, dates and IP addresses from a log file and prints a summary report |
 | `health_checker.py` | Checks disk usage, memory usage, network reachability and running processes |
+| `data_validator.py` | Reads records from a CSV, validates required fields, flags duplicates, and writes a cleaned output file |
+| `report_generator.py` | Generates a summary report (checks performed, problems found, recommended actions) in text, JSON, CSV or HTML format |
+| `main.py` | Runs all four modules together in one command and produces a single combined report |
 
 Each script has a matching test file (`test_*.py`).
 
@@ -60,6 +63,7 @@ Notes:
 - Files are sorted by extension. Unknown types go into `Others`.
 - Existing files are never overwritten. A clash is renamed (`a.png` becomes `a_1.png`).
 - Subfolders and hidden files are skipped.
+- Files are also checked for duplicate content (by hash) and invalid characters in the filename; both are flagged and logged.
 - Try it on a test folder with dummy files first.
 
 ### Log analyser
@@ -70,7 +74,8 @@ python log_analyser.py
 
 Enter the path to a log file, or press Enter to analyse the included `sample.log`. The report shows:
 
-- Lines containing `ERROR`, `CRITICAL` or `FATAL`
+- Lines containing `ERROR`, `CRITICAL`, `FATAL` or `WARNING`
+- Repeated errors (the same line occurring more than once)
 - Number of log entries per date (`YYYY-MM-DD`)
 - Valid IPv4 addresses, ranked by how often they appear (invalid addresses such as `999.1.1.1` are ignored)
 
@@ -121,6 +126,30 @@ All checks passed.
 
 Each check shows `[OK]`, `[FAIL]` or `[SKIP]` (skipped if it can't run on your system). The script exits with code `0` when everything passes and `1` when any check fails, so it can be used in scheduled tasks and other automation.
 
+### Data validator
+
+```
+python data_validator.py
+```
+
+Enter the path to a CSV file. Records missing required fields (`name`, `email`) are flagged as invalid; records with a repeated email are flagged as duplicates. A cleaned CSV of valid, unique records is written to `clean_records.csv`.
+
+### Report generator
+
+```
+python report_generator.py
+```
+
+Choose an output format (`text`, `json`, `csv`, `html`). Produces `reports/summary_report.<format>` containing the date, checks performed, problems detected, and recommended actions.
+
+### Running everything at once
+
+```
+python main.py --folder test_data --log sample.log --csv records.csv --format html
+```
+
+Runs the file organiser, log analyser, health checker and data validator in sequence, then writes one combined report covering all four.
+
 ## Running the tests
 
 Each script has its own test file. Run them from the project folder:
@@ -129,6 +158,7 @@ Each script has its own test file. Run them from the project folder:
 python test_file_organiser.py
 python test_log_analyser.py
 python test_health_checker.py
+python test_system_setup.py
 ```
 
 Every run should end with a line such as `14/14 tests passed`. The tests use temporary folders and mocked values, so they never touch your real files.
@@ -136,12 +166,12 @@ Every run should end with a line such as `14/14 tests passed`. The tests use tem
 ## Project structure
 
 ```
-
-## Project structure
-
 ├── file_organiser.py
 ├── log_analyser.py
 ├── health_checker.py
+├── data_validator.py
+├── report_generator.py
+├── main.py
 ├── test_file_organiser.py
 ├── test_log_analyser.py
 ├── test_health_checker.py
@@ -150,6 +180,10 @@ Every run should end with a line such as `14/14 tests passed`. The tests use tem
 ├── setup_config.json
 ├── test_system_setup.py
 ├── sample.log
+├── records.csv
+├── clean_records.csv
+├── test_data/
+├── reports/
 ├── .gitignore
 └── README.md
 ```
@@ -159,6 +193,8 @@ Every run should end with a line such as `14/14 tests passed`. The tests use tem
 - **File organiser:** tidy shared drives and download folders.
 - **Log analyser:** spot repeated failed logins and suspicious IP addresses quickly.
 - **Health checker:** run on a schedule to catch full disks, high memory use or stopped services before users notice.
+- **Data validator:** clean up messy CSV exports (e.g. user or device lists) before importing them elsewhere.
+- **Report generator / main.py:** produce one combined, shareable report after a routine automated sweep.
 
 ## Week 3: Troubleshooting, Performance and Configuration Management
 
