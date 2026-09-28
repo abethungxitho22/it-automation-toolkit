@@ -313,6 +313,15 @@ The image includes runtime modules and sample fixtures, and defaults to `--help`
 to avoid moving files accidentally. Tests, development dependencies, Git history
 and existing output reports are excluded from the build context.
 
+The runtime uses the official `python:3.12-alpine3.24` image, applies available
+Alpine package updates, and installs `procps` and `iputils` for process and ping
+checks. This replaces the Debian 12 base after its scan reported HIGH/CRITICAL
+OS-package findings without listed fixes. The vulnerability gate remains strict;
+changing the base is not a guarantee of a clean scan. The container smoke checks
+also verify process discovery and the presence of the ping executable.
+After a Dockerfile change, push a new commit or start a new full workflow run;
+rerunning only the failed scan reuses the old image artifact.
+
 This CI/CD extension supports the curriculum's Week 3 deployment/reliability and
 Week 4 integration, testing and demonstration work. The curriculum is project
 context; it does not itself require GitHub Actions or container scanning.

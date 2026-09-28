@@ -1,12 +1,13 @@
-FROM python:3.12-slim-bookworm
+# Keep the runtime small: this toolkit only needs Python's standard library.
+FROM python:3.12-alpine3.24
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends procps iputils-ping \
-    && rm -rf /var/lib/apt/lists/* \
-    && useradd --uid 10001 --create-home toolkit \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache procps iputils \
+    && addgroup -g 10001 toolkit \
+    && adduser -D -u 10001 -G toolkit toolkit \
     && mkdir /data \
     && chown toolkit:toolkit /data
 

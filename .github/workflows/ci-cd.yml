@@ -77,6 +77,9 @@ jobs:
       - name: Exercise the packaged toolkit as its non-root user
         run: |
           docker run --rm toolkit:ci --help
+          # Verify utilities and process discovery after changing the base OS.
+          docker run --rm --entrypoint python toolkit:ci -c \
+            'import sys; sys.path.insert(0, "/app"); import shutil; from health_checker import check_process; assert shutil.which("ping"); assert check_process("python")[0] is True'
           docker run --rm --entrypoint python \
             --mount "type=bind,src=$PWD/scripts/smoke_test.py,dst=/tmp/smoke_test.py,readonly" \
             toolkit:ci /tmp/smoke_test.py /app
