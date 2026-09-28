@@ -215,7 +215,12 @@ Lint → Tests → Build + container smoke test → Image scan → Publish → D
 Every stage depends on the previous stage passing. Images are built once and
 passed between jobs as an artifact; publishing does not rebuild them. Vulnerabilities
 without a fix also block release. Review `image-scan/trivy.json` in the run's
-artifacts, update affected components, and rerun the pipeline. The scanner image
+artifacts, update affected components, and rerun the pipeline. Findings are also
+printed in the scan job log, with affected packages, installed
+versions and fixed versions; counts appear in the job summary. Secret match
+contents are omitted from the printed summary. Treat the full JSON artifact as
+sensitive if secrets are detected. An exit code of 1 after scanning means the
+gate failed, not that Docker failed to download the scanner image. The scanner image
 is pinned by digest. Test/scan artifacts last 14 days; the image archive lasts
 3 days. Rerun the complete workflow if the image artifact has expired.
 

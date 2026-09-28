@@ -101,13 +101,44 @@ jobs:
       - name: Block HIGH and CRITICAL vulnerabilities and secrets
         run: |
           mkdir -p ci-results
+          scan_status=0
           docker run --rm \
             --user "$(id -u):$(id -g)" \
             --mount "type=bind,src=$PWD,dst=/work" \
             ghcr.io/aquasecurity/trivy:0.74.0@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9 \
             image --cache-dir /tmp/trivy --input /work/image.tar \
             --scanners vuln,secret --severity HIGH,CRITICAL \
-            --exit-code 1 --format json --output /work/ci-results/trivy.json
+            --exit-code 1 --format json --output /work/ci-results/trivy.json || scan_status=$?
+
+          # Keep Trivy's failure status, but show the findings before exiting.
+          # Do not print secret matches: only the rule and affected file.
+          if test -s ci-results/trivy.json; then
+            jq -r '
+              ["TARGET", "PACKAGE / RULE", "ID", "SEVERITY", "INSTALLED", "FIXED"],
+              (.Results[]? | .Target as $target |
+                (.Vulnerabilities[]? |
+                  [$target, .PkgName, .VulnerabilityID, .Severity,
+                   .InstalledVersion, (.FixedVersion // "No fix listed" | if . == "" then "No fix listed" else . end)]),
+                (.Secrets[]? |
+                  [$target, .RuleID, "Secret detected", .Severity, "-", "Remove and rotate secret"]))
+              | @tsv
+            ' ci-results/trivy.json | tee ci-results/scan-summary.txt
+            {
+              echo '### Image scan findings'
+              echo 'See the scan log and image-scan artifact for package versions and fixes.'
+              jq -r '
+                "Vulnerabilities: \([.Results[]?.Vulnerabilities[]?] | length)",
+                "Secrets: \([.Results[]?.Secrets[]?] | length)"
+              ' ci-results/trivy.json
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '::error::Trivy did not produce a JSON report. Check the scanner logs above.'
+            exit 1
+          fi
+          if test "$scan_status" -ne 0; then
+            echo '::error::Image scan failed. Review the findings above and the image-scan artifact.'
+          fi
+          exit "$scan_status"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
