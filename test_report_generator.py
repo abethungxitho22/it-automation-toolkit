@@ -75,6 +75,34 @@ def test_unsupported_format_raises():
     expect_error(ValueError, generate_report, CHECKS, PROBLEMS, ACTIONS, output_format="pdf")
 
 
+def test_html_dashboard_shows_metrics():
+    metrics = {"files_organised": 32, "log_errors": 14, "disk_percent": 91, "disk_threshold": 90,
+               "records_valid": 118, "records_total": 121,
+               "error_breakdown": [["Connection refused", 9], ["Timeout", 4]]}
+    folder = tempfile.mkdtemp()
+    path = Path(folder) / "r.html"
+    generate_report(CHECKS, PROBLEMS, ACTIONS, output_format="html", output_path=str(path), metrics=metrics)
+    text = path.read_text(encoding="utf-8")
+    assert "Files organized" in text and ">32<" in text
+    assert "91%" in text and "118/121" in text
+    assert "Connection refused" in text
+
+
+def test_html_without_metrics_still_works():
+    text = make_report("html").read_text(encoding="utf-8")
+    assert "Recommended actions" in text and "Files organized" not in text
+
+
+def test_html_escapes_problem_text():
+    text = make_report("html", problems=["<script>bad()</script>"]).read_text(encoding="utf-8")
+    assert "<script>bad()" not in text and "&lt;script&gt;" in text
+
+
+def test_summary_carries_metrics():
+    summary = build_summary(CHECKS, PROBLEMS, ACTIONS, {"log_errors": 3})
+    assert summary["metrics"] == {"log_errors": 3}
+
+
 if __name__ == "__main__":
     tests = [f for name, f in list(globals().items()) if name.startswith("test_")]
     passed = 0

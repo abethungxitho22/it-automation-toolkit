@@ -6,6 +6,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 IS_WINDOWS = platform.system() == "Windows"
@@ -112,6 +113,48 @@ def check_memory(threshold):
         return None, "Memory: could not be read on this system"
     return percent <= threshold, f"Memory: {percent:.1f}% used"
 
+def get_cpu_percent():
+    """Return CPU usage percentage, or None if it can't be read."""
+    try:
+        if IS_WINDOWS:
+            result = run_command(
+                ["wmic", "cpu", "get", "loadpercentage"],
+                timeout=5
+            )
+
+            if result.returncode != 0:
+                return None
+
+            values = []
+            for line in result.stdout.splitlines():
+                line = line.strip()
+                if line.isdigit():
+                    values.append(float(line))
+
+            if not values:
+                return None
+
+            return sum(values) / len(values)
+
+        # Linux/Unix: read the system load safely.
+        with open("/proc/loadavg") as loadavg:
+            load = float(loadavg.read().split()[0])
+
+        return load * 100
+
+    except (OSError, ValueError, IndexError, AttributeError):
+        logger.error("Could not read CPU usage", exc_info=True)
+        return None
+
+
+def check_cpu(threshold):
+    """Check CPU usage. Returns (status, message)."""
+    percent = get_cpu_percent()
+
+    if percent is None:
+        return None, "CPU: could not be read on this system"
+
+    return percent <= threshold, f"CPU: {percent:.1f}% used"
 
 def run_command(command, timeout=10):
     """Run a command and return the finished process.
@@ -185,6 +228,8 @@ def parse_args(argv=None):
                         help="warn if disk usage is above this %% (default: 90)")
     parser.add_argument("--memory-threshold", type=percentage, default=90,
                         help="warn if memory usage is above this %% (default: 90)")
+    parser.add_argument("--cpu-threshold", type=percentage, default=90,
+                    help="warn if CPU usage is above this %% (default: 90)")
     parser.add_argument("--ping", metavar="HOST",
                         help="also check that a host is reachable, e.g. google.com")
     parser.add_argument("--process", metavar="NAME",
@@ -201,6 +246,7 @@ def run_checks(args):
     results = [
         check_disk(args.disk_path, args.disk_threshold),
         check_memory(args.memory_threshold),
+        check_cpu(args.cpu_threshold),
     ]
     if args.ping:
         results.append(check_ping(args.ping))
@@ -212,8 +258,12 @@ def run_checks(args):
 def main(argv=None):
     args = parse_args(argv)
     setup_logging(args.log_file, args.verbose)
-    logger.info("Health check started (disk<=%s%%, memory<=%s%%)",
-                args.disk_threshold, args.memory_threshold)
+    logger.info(
+    "Health check started (disk<=%s%%, memory<=%s%%, cpu<=%s%%)",
+    args.disk_threshold,
+    args.memory_threshold,
+    args.cpu_threshold,
+)
 
     print("=" * 50)
     print("SYSTEM HEALTH CHECK")

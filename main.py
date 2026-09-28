@@ -1,13 +1,16 @@
 """
 main.py - IT Operations Automation Toolkit
 
-Runs all four automation modules in sequence against a target folder/files,
-then generates a single combined summary report.
+Runs all automation modules in sequence against a target folder/files,
+then generates a single combined summary report (and HTML dashboard).
 
     python main.py
-    python main.py --folder test_data --log sample.log --csv records.csv --format html
+    python main.py --folder demo_data --log sample.log --csv records.csv --format html
 """
 import argparse
+import re
+import shutil
+from collections import Counter
 from pathlib import Path
 
 from file_organiser import (organise_files, check_missing_files, read_expected_files,
@@ -17,15 +20,40 @@ from health_checker import check_disk, check_memory
 from data_validator import read_records, process_records, write_clean_file
 from report_generator import generate_report
 
+# Parts of a log line that change every time; removed so identical problems group together
+NOISE_PATTERNS = [
+    re.compile(r"\d{4}-\d{2}-\d{2}"),                        # date
+    re.compile(r"\d{1,2}:\d{2}:\d{2}(?:[.,]\d+)?"),          # time
+    re.compile(r"\b(?:ERROR|CRITICAL|FATAL|WARNING)\b"),     # level
+    re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b"),              # IP address
+]
 
-def run_file_organiser(folder, expected_path=None):
+
+def summarise_errors(error_lines, top=5):
+    """Group warning/error lines by their message and count them.
+
+    Returns a list of [message, count], most common first.
+    """
+    counts = Counter()
+    for line in error_lines:
+        text = line
+        for pattern in NOISE_PATTERNS:
+            text = pattern.sub("", text)
+        text = " ".join(text.split()).strip(" -:[]|")
+        counts[text[:1].upper() + text[1:] if text else line.strip()] += 1
+    return [[message, count] for message, count in counts.most_common(top)]
+
+
+def run_file_organiser(folder, expected_path=None, metrics=None):
     """Organise files in `folder` and check for missing files.
     Returns (checks, problems)."""
+    metrics = {} if metrics is None else metrics
     checks = []
     problems = []
     try:
         moved, errors = organise_files(folder)
         print_file_report(moved, errors)
+        metrics["files_organised"] = len(moved)
         checks.append(f"File organisation on '{folder}' ({len(moved)} moved)")
 
         if expected_path and Path(expected_path).exists():
@@ -47,8 +75,9 @@ def run_file_organiser(folder, expected_path=None):
     return checks, problems
 
 
-def run_log_analyser(log_path):
+def run_log_analyser(log_path, metrics=None):
     """Analyse a log file. Returns (checks, problems)."""
+    metrics = {} if metrics is None else metrics
     checks = []
     problems = []
     try:
@@ -59,6 +88,8 @@ def run_log_analyser(log_path):
         print(f"\nLog analysis of '{log_path}': {len(lines)} lines, "
               f"{len(errors)} warning/error lines, {len(dates)} distinct dates, "
               f"{len(ips)} distinct IPs")
+        metrics["log_errors"] = len(errors)
+        metrics["error_breakdown"] = summarise_errors(errors)
         checks.append(f"Log analysis on '{log_path}' ({len(lines)} lines)")
         if errors:
             problems.append(f"Log analysis: {len(errors)} warning/error line(s) found in {log_path}")
@@ -67,8 +98,9 @@ def run_log_analyser(log_path):
     return checks, problems
 
 
-def run_health_checker(disk_path, disk_threshold=90, memory_threshold=90):
+def run_health_checker(disk_path, disk_threshold=90, memory_threshold=90, metrics=None):
     """Run disk and memory checks. Returns (checks, problems)."""
+    metrics = {} if metrics is None else metrics
     checks = ["System health check (disk, memory)"]
     problems = []
 
@@ -76,6 +108,12 @@ def run_health_checker(disk_path, disk_threshold=90, memory_threshold=90):
     print(f"\n{disk_message}")
     if disk_ok is False:
         problems.append(f"Health check: {disk_message}")
+    try:
+        usage = shutil.disk_usage(disk_path)
+        metrics["disk_percent"] = round(usage.used / usage.total * 100)
+        metrics["disk_threshold"] = disk_threshold
+    except OSError:
+        pass  # dashboard shows n/a
 
     memory_ok, memory_message = check_memory(memory_threshold)
     print(memory_message)
@@ -85,8 +123,9 @@ def run_health_checker(disk_path, disk_threshold=90, memory_threshold=90):
     return checks, problems
 
 
-def run_data_validator(csv_path):
+def run_data_validator(csv_path, metrics=None):
     """Validate a CSV of records. Returns (checks, problems)."""
+    metrics = {} if metrics is None else metrics
     checks = []
     problems = []
     try:
@@ -96,6 +135,8 @@ def run_data_validator(csv_path):
         write_clean_file(valid, fieldnames, output_path)
         print(f"\nData validation of '{csv_path}': {len(valid)} valid, "
               f"{len(invalid)} invalid, {len(duplicates)} duplicate(s)")
+        metrics["records_valid"] = len(valid)
+        metrics["records_total"] = len(records)
         checks.append(f"Data validation on '{csv_path}' ({len(valid)} valid records)")
         if invalid:
             problems.append(f"Data validation: {len(invalid)} record(s) missing required fields")
@@ -151,12 +192,13 @@ def main(argv=None):
 
     all_checks = []
     all_problems = []
+    metrics = {}  # numbers for the dashboard's stat cards and chart
 
     for checks, problems in [
-        run_file_organiser(args.folder, args.expected),
-        run_log_analyser(args.log),
-        run_health_checker(args.disk_path),
-        run_data_validator(args.csv),
+        run_file_organiser(args.folder, args.expected, metrics),
+        run_log_analyser(args.log, metrics),
+        run_health_checker(args.disk_path, metrics=metrics),
+        run_data_validator(args.csv, metrics),
     ]:
         all_checks.extend(checks)
         all_problems.extend(problems)
@@ -164,7 +206,7 @@ def main(argv=None):
     recommended_actions = build_recommended_actions(all_problems)
 
     report_path = generate_report(all_checks, all_problems, recommended_actions,
-                                   output_format=args.format)
+                                   output_format=args.format, metrics=metrics)
 
     print("\n" + "=" * 60)
     print(f"{len(all_checks)} check(s) run, {len(all_problems)} problem(s) found")
