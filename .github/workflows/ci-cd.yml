@@ -152,7 +152,7 @@ jobs:
   publish:
     name: Publish scanned image
     needs: scan
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request'
+    if: (github.ref == 'refs/heads/develop' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -179,41 +179,3 @@ jobs:
           digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$image")
           echo "image=$digest" >> "$GITHUB_OUTPUT"
           echo "Published: \`$digest\`" >> "$GITHUB_STEP_SUMMARY"
-
-  deploy:
-    name: Deploy batch toolkit
-    needs: publish
-    if: vars.DEPLOY_ENABLED == 'true' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'pull_request'
-    runs-on: [self-hosted, linux, x64, toolkit-deploy]
-    environment: production
-    concurrency:
-      group: toolkit-production
-      cancel-in-progress: false
-    timeout-minutes: 15
-    permissions:
-      packages: read
-    steps:
-      - name: Pull by digest and run the batch against the deployment workspace
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          IMAGE: ${{ needs.publish.outputs.image }}
-          DATA_DIR: ${{ vars.TOOLKIT_DATA_DIR }}
-        run: |
-          test -n "$DATA_DIR" && [[ "$DATA_DIR" = /* ]]
-          test -d "$DATA_DIR/inbox"
-          test -f "$DATA_DIR/application.log"
-          test -f "$DATA_DIR/records.csv"
-          test -f "$DATA_DIR/expected_files.txt"
-          test -w "$DATA_DIR"
-          export DOCKER_CONFIG="$(mktemp -d)"
-          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker pull "$IMAGE"
-          docker run --rm --user "$(id -u):$(id -g)" \
-            --mount "type=bind,src=$DATA_DIR,dst=/data" \
-            "$IMAGE" --folder /data/inbox --log /data/application.log \
-            --csv /data/records.csv --expected /data/expected_files.txt --format json
-          docker run --rm --user "$(id -u):$(id -g)" --entrypoint python \
-            --mount "type=bind,src=$DATA_DIR,dst=/data,readonly" "$IMAGE" -c \
-            'import json; from pathlib import Path; r=json.loads(Path("reports/summary_report.json").read_text()); assert len(r["checks_performed"]) == 5, r; assert Path("clean_records.csv").is_file()'
-          echo "Deployed and executed: \`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"

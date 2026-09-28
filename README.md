@@ -209,10 +209,10 @@ Lint → Tests → Build + container smoke test → Image scan → Publish → D
 | Tests | All four OS/Python combinations pass pytest and the integrated smoke test |
 | Build | Docker image builds and passes its own smoke test as a non-root user |
 | Image scan | Trivy finds no HIGH/CRITICAL vulnerabilities or secrets; scanner errors also fail the job |
-| Publish | Default branch only: upload the exact scanned image to GitHub Container Registry (GHCR) |
-| Deploy | When configured: pull that image by digest on the Linux deployment runner and execute the batch |
+| Publish | `develop` and default branch: upload the exact scanned image to GitHub Container Registry (GHCR) |
+| Deploy | Separate manual workflow: rescan a selected digest, then execute it on the Linux deployment runner |
 
-Every stage depends on the previous stage passing. Images are built once and
+Every automatic stage depends on the previous stage passing. Deployment is a separate manual workflow in `.github/workflows/deploy.yml`. Images are built once and
 passed between jobs as an artifact; publishing does not rebuild them. Vulnerabilities
 without a fix also block release. Review `image-scan/trivy.json` in the run's
 artifacts, update affected components, and rerun the pipeline. Findings are also
@@ -229,15 +229,14 @@ is pinned by digest. Test/scan artifacts last 14 days; the image archive lasts
 1. Commit and push these files to GitHub. No GitLab configuration is needed.
 2. Ensure GitHub Actions is enabled and repository/organisation policy permits
    the official checkout, Python setup and artifact actions used by the workflow.
-3. Merge into the repository's default branch to publish to
+3. Push to `develop` or the repository's default branch to publish to
    `ghcr.io/<owner>/it-automation-toolkit`. Publishing uses the built-in
    `GITHUB_TOKEN` with `packages: write`; no registry password secret is needed.
    If a GHCR package already exists, grant this repository Actions access to it.
 4. Use the digest printed in the publish job summary for deployments or rollback.
    Each run gets a unique `sha-<commit>-<run-id>-<attempt>` image tag.
 
-Pull requests and non-default branches/tags validate and scan but do not publish
-or deploy. Fork pull requests use GitHub-hosted runners and receive no deployment
+Pull requests and branches other than `develop` or the default branch validate and scan without publishing. Tags do not publish. Pushes never deploy. Fork pull requests use GitHub-hosted runners and receive no deployment
 credentials. For branch protection, require **Lint**, all four **Test** checks,
 **Build and smoke-test image**, and **Scan image**; do not require the conditional
 publish/deploy jobs.
@@ -246,13 +245,13 @@ publish/deploy jobs.
 
 The toolkit is a one-shot batch application: deployment runs it to completion
 and stores outputs on the host. It does not start a web server. Host deployment
-is skipped until configured; CI and GHCR publishing work independently.
+runs only when manually requested; CI and GHCR publishing work independently.
 
 1. Register a dedicated Linux x64 self-hosted Actions runner on the target server
    with the custom label `toolkit-deploy`. Install Docker and Bash and allow the
    runner account to run Docker. Keep this runner restricted to trusted workflows.
-2. Create the GitHub environment **production**, limiting deployment branches to
-   the default branch. Configure required reviewers if your team needs them.
+2. Create the GitHub environment **production**, allowing deployment branches
+   `develop` and the default branch. Configure required reviewers if your team needs them.
 3. Prepare a dedicated writable workspace, owned by the runner account:
 
    ```text
@@ -271,9 +270,14 @@ is skipped until configured; CI and GHCR publishing work independently.
    | `DEPLOY_ENABLED` | `true` to enable the deployment job |
    | `TOOLKIT_DATA_DIR` | Absolute host path, for example `/srv/it-automation-toolkit` |
 
-5. Push to the default branch or run the workflow there. Deployment pulls the
-   published digest and runs with the runner's UID/GID, so the mounted data stays
-   writable without running the toolkit as root.
+5. Merge `.github/workflows/deploy.yml` into the default branch once so GitHub
+   displays its manual trigger. Then open **Actions ? Deploy toolkit manually ?
+   Run workflow**, choose `develop` or the default branch, and paste the full
+   `ghcr.io/<owner>/<repository>@sha256:<digest>` from a successful publish summary.
+   The workflow validates the configuration and rescans that exact image before
+   deployment. It runs with the runner's UID/GID so mounted data remains writable.
+   Setting `DEPLOY_ENABLED=true` enables manual deployment; it never deploys on push.
+   See [GitHub manual workflow requirements](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
 Use copies of the sample inputs for the first deployment. The organiser moves
 files inside `inbox`; each run overwrites `clean_records.csv` and

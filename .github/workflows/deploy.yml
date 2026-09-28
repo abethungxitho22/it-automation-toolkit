@@ -1,0 +1,94 @@
+name: Deploy toolkit manually
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'Full ghcr.io image@sha256:digest from a successful publish job'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate:
+    name: Validate and rescan release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      packages: read
+    steps:
+      - name: Check deployment configuration and scan the selected digest
+        env:
+          IMAGE: ${{ inputs.image }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_ENABLED: ${{ vars.DEPLOY_ENABLED }}
+          DATA_DIR: ${{ vars.TOOLKIT_DATA_DIR }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/develop" && "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            echo '::error::Deploy only from develop or the default branch.'
+            exit 1
+          fi
+          if [[ "$DEPLOY_ENABLED" != true || "$DATA_DIR" != /* ]]; then
+            echo '::error::Set repository variables DEPLOY_ENABLED=true and TOOLKIT_DATA_DIR to an absolute host path.'
+            exit 1
+          fi
+          repository="ghcr.io/${GITHUB_REPOSITORY,,}"
+          digest="${IMAGE#"$repository@sha256:"}"
+          if [[ "$IMAGE" != "$repository@sha256:$digest" || ! "$digest" =~ ^[a-f0-9]{64}$ ]]; then
+            echo '::error::Use the full immutable image digest from this repository publish job.'
+            exit 1
+          fi
+          export DOCKER_CONFIG="$(mktemp -d)"
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker pull "$IMAGE"
+          docker save --output image.tar "$IMAGE"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --mount "type=bind,src=$PWD,dst=/work,readonly" \
+            ghcr.io/aquasecurity/trivy:0.74.0@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9 \
+            image --cache-dir /tmp/trivy --input /work/image.tar \
+            --scanners vuln,secret --severity HIGH,CRITICAL --exit-code 1
+
+  deploy:
+    name: Deploy batch toolkit
+    needs: validate
+    runs-on: [self-hosted, linux, x64, toolkit-deploy]
+    environment: production
+    concurrency:
+      group: toolkit-production
+      cancel-in-progress: false
+    timeout-minutes: 15
+    permissions:
+      packages: read
+    steps:
+      - name: Pull by digest and run the batch against the deployment workspace
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE: ${{ inputs.image }}
+          DATA_DIR: ${{ vars.TOOLKIT_DATA_DIR }}
+        run: |
+          test -n "$DATA_DIR" && [[ "$DATA_DIR" = /* ]]
+          test -d "$DATA_DIR/inbox"
+          test -f "$DATA_DIR/application.log"
+          test -f "$DATA_DIR/records.csv"
+          test -f "$DATA_DIR/expected_files.txt"
+          test -w "$DATA_DIR"
+          export DOCKER_CONFIG="$(mktemp -d)"
+          trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker pull "$IMAGE"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            --mount "type=bind,src=$DATA_DIR,dst=/data" \
+            "$IMAGE" --folder /data/inbox --log /data/application.log \
+            --csv /data/records.csv --expected /data/expected_files.txt --format json
+          docker run --rm --user "$(id -u):$(id -g)" --entrypoint python \
+            --mount "type=bind,src=$DATA_DIR,dst=/data,readonly" "$IMAGE" -c \
+            'import json; from pathlib import Path; r=json.loads(Path("reports/summary_report.json").read_text()); assert len(r["checks_performed"]) == 5, r; assert Path("clean_records.csv").is_file()'
+          echo "Deployed and executed: \`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
