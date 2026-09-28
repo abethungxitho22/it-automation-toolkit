@@ -18,7 +18,7 @@ def read_records(path):
 def is_valid(record):
     """A record is valid if every required field has a value."""
     for field in REQUIRED_FIELDS:
-        if not record.get(field, "").strip():
+        if not (record.get(field) or "").strip():
             return False
     return True
 
@@ -38,7 +38,7 @@ def process_records(records):
             invalid.append(record)
             continue
 
-        key = record.get(KEY_FIELD, "").strip().lower()
+        key = (record.get(KEY_FIELD) or "").strip().lower()
         if key in seen_keys:
             duplicates.append(record)
             continue

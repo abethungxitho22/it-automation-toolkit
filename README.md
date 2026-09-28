@@ -8,7 +8,7 @@ Built during the CAPACITI IT automation programme (Week 2: Operating-System Auto
 
 | Script | What it does |
 |---|---|
-| `file_organiser.py` | Sorts the files in a folder into category subfolders (Images, Documents, Archives, and more) |
+| `file_organiser.py` | Sorts the files in a folder into category subfolders (Images, Documents, Archives, and more), flags duplicate, badly named and missing files, and logs every change |
 | `log_analyser.py` | Extracts errors, dates and IP addresses from a log file and prints a summary report |
 | `health_checker.py` | Checks disk usage, memory usage, network reachability and running processes |
 | `data_validator.py` | Reads records from a CSV, validates required fields, flags duplicates, and writes a cleaned output file |
@@ -64,6 +64,7 @@ Notes:
 - Existing files are never overwritten. A clash is renamed (`a.png` becomes `a_1.png`).
 - Subfolders and hidden files are skipped.
 - Files are also checked for duplicate content (by hash) and invalid characters in the filename; both are flagged and logged.
+- **Missing files:** after moving, you can give the script a list of expected filenames (one per line, like `expected_files.txt`). Any name that can't be found in the folder or its category subfolders is reported as `MISSING` and written to the log. Blank lines and lines starting with `#` in the list are ignored.
 - Try it on a test folder with dummy files first.
 
 ### Log analyser
@@ -148,7 +149,18 @@ Choose an output format (`text`, `json`, `csv`, `html`). Produces `reports/summa
 python main.py --folder test_data --log sample.log --csv records.csv --format html
 ```
 
-Runs the file organiser, log analyser, health checker and data validator in sequence, then writes one combined report covering all four.
+Runs the file organiser (including the missing-file check), log analyser, health checker and data validator in sequence, then writes one combined report covering all of them.
+
+| Option | Description | Default |
+|---|---|---|
+| `--folder` | Folder to organise | `test_data` |
+| `--expected` | Text file listing filenames that should exist | `expected_files.txt` |
+| `--log` | Log file to analyse | `sample.log` |
+| `--disk-path` | Path to check disk usage on | `.` |
+| `--csv` | CSV file to validate | `records.csv` |
+| `--format` | Report format: `text`, `json`, `csv`, `html` | `text` |
+
+If the expected-files list isn't found, the missing-file check is skipped and the rest of the toolkit still runs.
 
 ## Running the tests
 
@@ -158,6 +170,8 @@ Each script has its own test file. Run them from the project folder:
 python test_file_organiser.py
 python test_log_analyser.py
 python test_health_checker.py
+python test_data_validator.py
+python test_report_generator.py
 python test_system_setup.py
 ```
 
@@ -175,6 +189,8 @@ Every run should end with a line such as `14/14 tests passed`. The tests use tem
 ├── test_file_organiser.py
 ├── test_log_analyser.py
 ├── test_health_checker.py
+├── test_data_validator.py
+├── test_report_generator.py
 ├── performance_lab/
 ├── system_setup.py
 ├── setup_config.json
@@ -182,11 +198,33 @@ Every run should end with a line such as `14/14 tests passed`. The tests use tem
 ├── sample.log
 ├── records.csv
 ├── clean_records.csv
+├── expected_files.txt
 ├── test_data/
+├── logs/
 ├── reports/
+├── troubleshooting_report.md
 ├── .gitignore
 └── README.md
 ```
+
+## Sample input and output files
+
+Inputs:
+
+- `test_data/`: sample files to organise (mixed types, a duplicate, a badly named file)
+- `expected_files.txt`: filenames that should exist (includes `budget.xlsx`, which is deliberately absent so the missing-file check has something to find)
+- `sample.log`: log file for the log analyser
+- `records.csv`: user records for the data validator (includes invalid and duplicate rows)
+
+Outputs:
+
+- `clean_records.csv`: valid, unique records written by the data validator
+- `logs/file_organiser.log`: every file moved and every problem found by the file organiser
+- `reports/summary_report.html` (also `.txt`, `.json`, `.csv`): the combined report from `main.py`
+
+## Troubleshooting
+
+Problems found and fixed while building the capstone toolkit are documented in `troubleshooting_report.md`.
 
 ## How this could help an IT department
 
