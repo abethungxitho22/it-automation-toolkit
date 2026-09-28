@@ -10,22 +10,36 @@ then generates a single combined summary report.
 import argparse
 from pathlib import Path
 
-from file_organiser import organise_files, print_report as print_file_report, write_log as write_file_log
+from file_organiser import (organise_files, check_missing_files, read_expected_files,
+                            print_report as print_file_report, write_log as write_file_log)
 from log_analyser import read_log, extract_errors, extract_dates, extract_ips
 from health_checker import check_disk, check_memory
 from data_validator import read_records, process_records, write_clean_file
 from report_generator import generate_report
 
 
-def run_file_organiser(folder):
-    """Organise files in `folder`. Returns (checks, problems)."""
+def run_file_organiser(folder, expected_path=None):
+    """Organise files in `folder` and check for missing files.
+    Returns (checks, problems)."""
     checks = []
     problems = []
     try:
         moved, errors = organise_files(folder)
         print_file_report(moved, errors)
-        write_file_log(moved, errors)
         checks.append(f"File organisation on '{folder}' ({len(moved)} moved)")
+
+        if expected_path and Path(expected_path).exists():
+            expected = read_expected_files(expected_path)
+            missing = check_missing_files(folder, expected)
+            for name in missing:
+                print(f"MISSING: {name}")
+                errors.append((Path(name), f"Missing file: expected '{name}' was not found"))
+            checks.append(f"Missing-file check against '{expected_path}' "
+                          f"({len(expected)} expected, {len(missing)} missing)")
+        else:
+            print(f"\nNo expected-files list found ({expected_path}) - skipping missing-file check")
+
+        write_file_log(moved, errors)
         for _, message in errors:
             problems.append(f"File automation: {message}")
     except (FileNotFoundError, NotADirectoryError) as error:
@@ -99,8 +113,10 @@ def build_recommended_actions(problems):
     actions = []
     if any("duplicate" in p.lower() for p in problems):
         actions.append("Review and remove confirmed duplicate files/records")
-    if any("invalid" in p.lower() or "missing" in p.lower() for p in problems):
-        actions.append("Correct or remove invalid records before re-import")
+    if any("missing file" in p.lower() for p in problems):
+        actions.append("Locate or restore the missing files")
+    if any("invalid" in p.lower() or "missing required" in p.lower() for p in problems):
+        actions.append("Correct or remove invalid records and filenames")
     if any("warning" in p.lower() or "error" in p.lower() for p in problems):
         actions.append("Investigate warning/error lines flagged in the logs")
     if any("disk" in p.lower() or "memory" in p.lower() for p in problems):
@@ -116,6 +132,8 @@ def parse_args(argv=None):
                     "produces one combined report."
     )
     parser.add_argument("--folder", default="test_data", help="folder to organise")
+    parser.add_argument("--expected", default="expected_files.txt",
+                        help="text file listing filenames that should exist (default: expected_files.txt)")
     parser.add_argument("--log", default="sample.log", help="log file to analyse")
     parser.add_argument("--disk-path", default=".", help="path to check disk usage on")
     parser.add_argument("--csv", default="records.csv", help="CSV file to validate")
@@ -135,7 +153,7 @@ def main(argv=None):
     all_problems = []
 
     for checks, problems in [
-        run_file_organiser(args.folder),
+        run_file_organiser(args.folder, args.expected),
         run_log_analyser(args.log),
         run_health_checker(args.disk_path),
         run_data_validator(args.csv),

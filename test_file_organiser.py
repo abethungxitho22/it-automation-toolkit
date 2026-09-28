@@ -1,7 +1,8 @@
 import tempfile
 from pathlib import Path
 
-from file_organiser import get_category, organise_files, unique_destination
+from file_organiser import (get_category, organise_files, unique_destination,
+                            check_missing_files, read_expected_files)
 
 
 def expect_error(error_type, func, *args):
@@ -34,7 +35,7 @@ def test_files_are_moved():
         assert (Path(folder) / "Images" / "a.png").exists()
         assert (Path(folder) / "Documents" / "b.pdf").exists()
         assert (Path(folder) / "Others" / "c.xyz").exists()
-        
+
 def test_dry_run_moves_nothing():
     with tempfile.TemporaryDirectory() as folder:
         make_files(folder, ["a.png"])
@@ -66,6 +67,41 @@ def test_path_is_a_file_not_folder():
     with tempfile.TemporaryDirectory() as folder:
         make_files(folder, ["a.txt"])
         expect_error(NotADirectoryError, organise_files, str(Path(folder) / "a.txt"))
+
+def test_duplicate_content_is_flagged():
+    with tempfile.TemporaryDirectory() as folder:
+        (Path(folder) / "a.txt").write_text("same")
+        (Path(folder) / "b.txt").write_text("same")
+        moved, errors = organise_files(folder)
+        assert len(moved) == 1
+        assert len(errors) == 1 and "Duplicate" in errors[0][1]
+
+def test_invalid_filename_is_flagged():
+    with tempfile.TemporaryDirectory() as folder:
+        (Path(folder) / "bad!name.txt").write_text("x")
+        _, errors = organise_files(folder)
+        assert len(errors) == 1 and "Invalid filename" in errors[0][1]
+
+def test_missing_files_are_reported():
+    with tempfile.TemporaryDirectory() as folder:
+        (Path(folder) / "a.png").write_text("image")
+        organise_files(folder)
+        assert check_missing_files(folder, ["a.png", "b.pdf"]) == ["b.pdf"]
+
+def test_no_missing_files():
+    with tempfile.TemporaryDirectory() as folder:
+        (Path(folder) / "a.png").write_text("image")
+        organise_files(folder)
+        assert check_missing_files(folder, ["a.png"]) == []
+
+def test_read_expected_files_skips_blanks_and_comments():
+    with tempfile.TemporaryDirectory() as folder:
+        list_file = Path(folder) / "expected.txt"
+        list_file.write_text("a.txt\n\n# a comment\nb.txt\n")
+        assert read_expected_files(list_file) == ["a.txt", "b.txt"]
+
+def test_missing_expected_list_raises():
+    expect_error(FileNotFoundError, read_expected_files, "no/such/list.txt")
 
 
 if __name__ == "__main__":

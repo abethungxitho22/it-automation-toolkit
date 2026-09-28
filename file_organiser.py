@@ -51,6 +51,37 @@ def is_valid_name(filename):
     return bool(VALID_NAME_PATTERN.match(filename))
 
 
+def read_expected_files(path):
+    """Read a list of expected filenames (one per line) from a text file.
+
+    Blank lines and lines starting with # are ignored.
+    Raises FileNotFoundError if the list does not exist.
+    """
+    names = []
+    with open(path, "r", encoding="utf-8-sig") as list_file:
+        for line in list_file:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                names.append(line)
+    return names
+
+
+def check_missing_files(folder, expected_names):
+    """Return the expected filenames that cannot be found in the folder
+    or in any of its category subfolders.
+
+    Raises FileNotFoundError / NotADirectoryError for a bad folder path.
+    """
+    folder = Path(folder)
+    if not folder.exists():
+        raise FileNotFoundError(f"Folder not found: {folder}")
+    if not folder.is_dir():
+        raise NotADirectoryError(f"Not a folder: {folder}")
+
+    present = {item.name for item in folder.rglob("*") if item.is_file()}
+    return [name for name in expected_names if name not in present]
+
+
 def organise_files(folder, dry_run=False):
     """Sort the files in `folder` into category subfolders.
 
@@ -136,6 +167,15 @@ if __name__ == "__main__":
                 moved, errors = organise_files(path)
                 print()
                 print_report(moved, errors)
+
+                list_path = input("\nExpected-files list to check for missing files (Enter to skip): ").strip().strip('"')
+                if list_path:
+                    missing = check_missing_files(path, read_expected_files(list_path))
+                    for name in missing:
+                        print(f"MISSING: {name}")
+                        errors.append((Path(name), f"Missing file: expected '{name}' was not found"))
+                    print(f"{len(missing)} expected file(s) missing.")
+
                 write_log(moved, errors)
             else:
                 print("Cancelled. No files were moved.")

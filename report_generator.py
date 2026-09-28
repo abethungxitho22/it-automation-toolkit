@@ -37,6 +37,109 @@ def write_json(summary, path):
     Path(path).write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
 
+def write_html(summary, path):
+    def as_list(items, empty_text="None — all clear"):
+        if not items:
+            return f"<li class='empty'>{empty_text}</li>"
+        return "".join(f"<li>{item}</li>" for item in items)
+
+    problem_count = len(summary["problems_detected"])
+    status_color = "#2e7d32" if problem_count == 0 else "#c62828"
+    status_text = "All checks passed" if problem_count == 0 else f"{problem_count} problem(s) detected"
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+<title>IT Automation Toolkit Report</title>
+<style>
+    body {{
+        font-family: Segoe UI, Arial, sans-serif;
+        background: #f4f6f8;
+        color: #222;
+        margin: 0;
+        padding: 40px;
+    }}
+    .container {{
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        padding: 30px 40px;
+    }}
+    h1 {{
+        margin-top: 0;
+        color: #1a237e;
+    }}
+    .status-banner {{
+        display: inline-block;
+        padding: 8px 18px;
+        border-radius: 20px;
+        color: white;
+        font-weight: bold;
+        background: {status_color};
+        margin-bottom: 20px;
+    }}
+    .date {{
+        color: #666;
+        margin-bottom: 20px;
+    }}
+    .card {{
+        background: #fafafa;
+        border-left: 4px solid #1a237e;
+        border-radius: 6px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+    }}
+    .card.problems {{
+        border-left-color: #c62828;
+    }}
+    .card.actions {{
+        border-left-color: #f9a825;
+    }}
+    h2 {{
+        margin-top: 0;
+        font-size: 18px;
+        color: #333;
+    }}
+    ul {{
+        margin: 0;
+        padding-left: 20px;
+    }}
+    li {{
+        margin-bottom: 6px;
+    }}
+    li.empty {{
+        color: #2e7d32;
+        font-style: italic;
+    }}
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>IT Automation Toolkit</h1>
+    <div class="status-banner">{status_text}</div>
+    <div class="date"><strong>Generated:</strong> {summary['date']}</div>
+
+    <div class="card">
+        <h2>Checks performed</h2>
+        <ul>{as_list(summary['checks_performed'], "No checks run")}</ul>
+    </div>
+
+    <div class="card problems">
+        <h2>Problems detected</h2>
+        <ul>{as_list(summary['problems_detected'])}</ul>
+    </div>
+
+    <div class="card actions">
+        <h2>Recommended actions</h2>
+        <ul>{as_list(summary['recommended_actions'], "No action needed")}</ul>
+    </div>
+</div>
+</body>
+</html>"""
+    Path(path).write_text(html, encoding="utf-8")
+
 def write_csv(summary, path):
     with open(path, "w", encoding="utf-8", newline="") as csv_file:
         writer = csv.writer(csv_file)
@@ -52,31 +155,7 @@ def write_csv(summary, path):
         writer.writerow([])
         writer.writerow(["recommended_actions"])
         for item in summary["recommended_actions"]:
-            writer.writerow([item])
-
-
-def write_html(summary, path):
-    def as_list(items):
-        if not items:
-            return "<li>(none)</li>"
-        return "".join(f"<li>{item}</li>" for item in items)
-
-    html = f"""<!DOCTYPE html>
-<html>
-<head><title>IT Automation Toolkit Report</title></head>
-<body>
-<h1>IT Automation Toolkit - Summary Report</h1>
-<p><strong>Date:</strong> {summary['date']}</p>
-<h2>Checks performed</h2>
-<ul>{as_list(summary['checks_performed'])}</ul>
-<h2>Problems detected</h2>
-<ul>{as_list(summary['problems_detected'])}</ul>
-<h2>Recommended actions</h2>
-<ul>{as_list(summary['recommended_actions'])}</ul>
-</body>
-</html>"""
-    Path(path).write_text(html, encoding="utf-8")
-
+            writer.writerow([item])  
 
 WRITERS = {
     "text": write_text,
