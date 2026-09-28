@@ -6,3 +6,43 @@
 2026-09-25T16:56:18 | error | doc2.txt | Duplicate of doc1.txt
 2026-09-25T21:24:32 | moved | doc2.txt -> test_data\Documents\doc2.txt
 2026-09-28T10:40:14 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T20:34:08 | moved | bad file!.txt -> demo_data\Documents\bad file!.txt
+2026-09-28T20:34:08 | moved | doc1.txt -> demo_data\Documents\doc1.txt
+2026-09-28T20:34:08 | moved | photo.jpg -> demo_data\Images\photo.jpg
+2026-09-28T20:34:08 | moved | report.pdf -> demo_data\Documents\report.pdf
+2026-09-28T20:34:08 | error | bad file!.txt | Invalid filename (unsupported characters)
+2026-09-28T20:34:08 | error | doc2.txt | Duplicate of doc1.txt
+2026-09-28T20:34:08 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T20:35:42 | moved | doc2.txt -> demo_data\Documents\doc2.txt
+2026-09-28T20:35:42 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T20:37:40 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T20:38:11 | moved | bad file!.txt -> demo_data\Documents\bad file!.txt
+2026-09-28T20:38:11 | moved | doc1.txt -> demo_data\Documents\doc1.txt
+2026-09-28T20:38:11 | moved | photo.jpg -> demo_data\Images\photo.jpg
+2026-09-28T20:38:11 | moved | report.pdf -> demo_data\Documents\report.pdf
+2026-09-28T20:38:11 | error | bad file!.txt | Invalid filename (unsupported characters)
+2026-09-28T20:38:11 | error | doc2.txt | Duplicate of doc1.txt
+2026-09-28T20:38:11 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T22:14:35 | moved | doc2.txt -> demo_data\Documents\doc2.txt
+2026-09-28T22:14:35 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T22:27:57 | moved | doc2.txt -> demo_data\Documents\doc2.txt
+2026-09-28T22:27:57 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T22:37:58 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T22:42:53 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T22:43:12 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T23:10:16 | moved | bad file!.txt -> organiser_demo\Documents\bad file!.txt
+2026-09-28T23:10:16 | moved | doc1.txt -> organiser_demo\Documents\doc1.txt
+2026-09-28T23:10:16 | moved | photo.jpg -> organiser_demo\Images\photo.jpg
+2026-09-28T23:10:16 | moved | report.pdf -> organiser_demo\Documents\report.pdf
+2026-09-28T23:10:16 | error | bad file!.txt | Invalid filename (unsupported characters)
+2026-09-28T23:10:16 | error | doc2.txt | Duplicate of doc1.txt
+2026-09-28T23:27:49 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T23:33:20 | moved | bad file!.txt -> organiser_demo2\Documents\bad file!.txt
+2026-09-28T23:33:20 | moved | doc1.txt -> organiser_demo2\Documents\doc1.txt
+2026-09-28T23:33:20 | moved | photo.jpg -> organiser_demo2\Images\photo.jpg
+2026-09-28T23:33:20 | moved | report.pdf -> organiser_demo2\Documents\report.pdf
+2026-09-28T23:33:20 | error | bad file!.txt | Invalid filename (unsupported characters)
+2026-09-28T23:33:20 | error | doc2.txt | Duplicate of doc1.txt
+2026-09-28T23:33:20 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found
+2026-09-28T23:59:53 | moved | doc2.txt -> organiser_demo2\Documents\doc2.txt
+2026-09-28T23:59:53 | error | budget.xlsx | Missing file: expected 'budget.xlsx' was not found

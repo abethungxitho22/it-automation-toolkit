@@ -6,7 +6,6 @@ import platform
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 IS_WINDOWS = platform.system() == "Windows"

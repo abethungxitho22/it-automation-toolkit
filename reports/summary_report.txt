@@ -1,19 +1,26 @@
 ==================================================
 IT AUTOMATION TOOLKIT - SUMMARY REPORT
 ==================================================
-Date: 2026-09-25 21:14:45
+Date: 2026-09-28 23:33:20
 
 Checks performed:
-  - File organisation (file_organiser.py)
-  - Log analysis (log_analyser.py)
-  - System health check (health_checker.py)
-  - Data validation (data_validator.py)
+  - File organisation on 'organiser_demo2' (4 moved)
+  - Missing-file check against 'expected_files.txt' (4 expected, 1 missing)
+  - Log analysis on 'sample.log' (11 lines)
+  - System health check (disk, memory)
+  - Data validation on 'records.csv' (3 valid records)
 
 Problems detected:
-  - 1 duplicate file found in test_data
-  - 2 invalid records found in records.csv
+  - File automation: Invalid filename (unsupported characters)
+  - File automation: Duplicate of doc1.txt
+  - File automation: Missing file: expected 'budget.xlsx' was not found
+  - Log analysis: 5 warning/error line(s) found in sample.log
+  - Data validation: 2 record(s) missing required fields
+  - Data validation: 1 duplicate record(s) found
 
 Recommended actions:
-  - Review and remove confirmed duplicate files
-  - Correct or remove invalid records before re-import
+  - Review and remove confirmed duplicate files/records
+  - Locate or restore the missing files
+  - Correct or remove invalid records and filenames
+  - Investigate warning/error lines flagged in the logs
 ==================================================
