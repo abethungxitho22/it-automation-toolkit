@@ -3,7 +3,19 @@ name: Toolkit CI/CD
 on:
   push:
   pull_request:
+
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: 'Deploy a previously published toolkit image'
+        required: true
+        default: false
+        type: boolean
+
+      image:
+        description: 'Published GHCR image tag or digest to deploy'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -17,165 +29,604 @@ defaults:
     shell: bash
 
 jobs:
+
+  # ============================================================
+  # LINT
+  # ============================================================
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
+
       - run: python -m pip install -r requirements-dev.txt
+
       - run: python -m ruff check .
+
+
+  # ============================================================
+  # TEST MATRIX
+  # ============================================================
 
   test:
     name: Test (${{ matrix.os }}, Python ${{ matrix.python }})
     needs: lint
+
     runs-on: ${{ matrix.os }}
+
     timeout-minutes: 15
+
     strategy:
       fail-fast: false
+
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python: ['3.12', '3.14']
+        os:
+          - ubuntu-latest
+          - windows-latest
+
+        python:
+          - '3.12'
+          - '3.14'
+
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
           cache: pip
+
       - run: python -m pip install -r requirements-dev.txt
+
       - run: python -m pytest -q --junitxml=ci-results/tests.xml
+
       - run: python scripts/smoke_test.py
+
       - uses: actions/upload-artifact@v4
         if: always()
+
         with:
           name: tests-${{ matrix.os }}-${{ matrix.python }}
+
           path: ci-results/
+
           retention-days: 14
+
+
+  # ============================================================
+  # BUILD DOCKER IMAGE
+  # ============================================================
 
   build:
     name: Build and smoke-test image
+
     needs: test
+
     runs-on: ubuntu-latest
+
     timeout-minutes: 20
+
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
       - name: Build once
         run: |
           docker build --pull --tag toolkit:ci \
             --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" .
+
       - name: Exercise the packaged toolkit as its non-root user
         run: |
+
           docker run --rm toolkit:ci --help
-          # Verify utilities and process discovery after changing the base OS.
-          docker run --rm --entrypoint python toolkit:ci -c \
-            'import sys; sys.path.insert(0, "/app"); import shutil; from health_checker import check_process; assert shutil.which("ping"); assert check_process("python")[0] is True'
-          docker run --rm --entrypoint python \
+
+          # Verify utilities and process discovery after changing
+          # the base OS.
+
+          docker run --rm \
+            --entrypoint python \
+            toolkit:ci \
+            -c 'import sys; sys.path.insert(0, "/app"); import shutil; from health_checker import check_process; assert shutil.which("ping"); assert check_process("python")[0] is True'
+
+          docker run --rm \
+            --entrypoint python \
             --mount "type=bind,src=$PWD/scripts/smoke_test.py,dst=/tmp/smoke_test.py,readonly" \
-            toolkit:ci /tmp/smoke_test.py /app
-          docker save --output image.tar toolkit:ci
+            toolkit:ci \
+            /tmp/smoke_test.py /app
+
+          docker save \
+            --output image.tar \
+            toolkit:ci
+
       - uses: actions/upload-artifact@v4
+
         with:
           name: toolkit-image
+
           path: image.tar
+
           compression-level: 0
+
           retention-days: 3
+
           if-no-files-found: error
+
+
+  # ============================================================
+  # SECURITY SCAN
+  # ============================================================
 
   scan:
     name: Scan image
+
     needs: build
+
     runs-on: ubuntu-latest
+
     timeout-minutes: 20
+
     steps:
       - uses: actions/download-artifact@v4
+
         with:
           name: toolkit-image
+
       - name: Block HIGH and CRITICAL vulnerabilities and secrets
         run: |
+
           mkdir -p ci-results
+
           scan_status=0
+
           docker run --rm \
             --user "$(id -u):$(id -g)" \
             --mount "type=bind,src=$PWD,dst=/work" \
             ghcr.io/aquasecurity/trivy:0.74.0@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9 \
-            image --cache-dir /tmp/trivy --input /work/image.tar \
-            --scanners vuln,secret --severity HIGH,CRITICAL \
-            --exit-code 1 --format json --output /work/ci-results/trivy.json || scan_status=$?
+            image \
+            --cache-dir /tmp/trivy \
+            --input /work/image.tar \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format json \
+            --output /work/ci-results/trivy.json || scan_status=$?
 
-          # Keep Trivy's failure status, but show the findings before exiting.
-          # Do not print secret matches: only the rule and affected file.
+          # Keep Trivy's failure status,
+          # but show the findings before exiting.
+          #
+          # Do not print secret matches:
+          # only the rule and affected file.
+
           if test -s ci-results/trivy.json; then
+
             jq -r '
               ["TARGET", "PACKAGE / RULE", "ID", "SEVERITY", "INSTALLED", "FIXED"],
-              (.Results[]? | .Target as $target |
-                (.Vulnerabilities[]? |
-                  [$target, .PkgName, .VulnerabilityID, .Severity,
-                   .InstalledVersion, (.FixedVersion // "No fix listed" | if . == "" then "No fix listed" else . end)]),
-                (.Secrets[]? |
-                  [$target, .RuleID, "Secret detected", .Severity, "-", "Remove and rotate secret"]))
+              (
+                .Results[]? |
+                .Target as $target |
+
+                (
+                  .Vulnerabilities[]? |
+
+                  [
+                    $target,
+                    .PkgName,
+                    .VulnerabilityID,
+                    .Severity,
+                    .InstalledVersion,
+                    (
+                      .FixedVersion //
+                      "No fix listed" |
+                      if . == ""
+                      then "No fix listed"
+                      else .
+                      end
+                    )
+                  ]
+                ),
+
+                (
+                  .Secrets[]? |
+
+                  [
+                    $target,
+                    .RuleID,
+                    "Secret detected",
+                    .Severity,
+                    "-",
+                    "Remove and rotate secret"
+                  ]
+                )
+              )
               | @tsv
-            ' ci-results/trivy.json | tee ci-results/scan-summary.txt
+            ' ci-results/trivy.json |
+              tee ci-results/scan-summary.txt
+
             {
+
               echo '### Image scan findings'
+
               echo 'See the scan log and image-scan artifact for package versions and fixes.'
+
               jq -r '
                 "Vulnerabilities: \([.Results[]?.Vulnerabilities[]?] | length)",
                 "Secrets: \([.Results[]?.Secrets[]?] | length)"
               ' ci-results/trivy.json
+
             } >> "$GITHUB_STEP_SUMMARY"
+
           else
+
             echo '::error::Trivy did not produce a JSON report. Check the scanner logs above.'
+
             exit 1
+
           fi
+
           if test "$scan_status" -ne 0; then
+
             echo '::error::Image scan failed. Review the findings above and the image-scan artifact.'
+
           fi
+
           exit "$scan_status"
+
       - uses: actions/upload-artifact@v4
         if: always()
+
         with:
           name: image-scan
+
           path: ci-results/
+
           retention-days: 14
+
+
+  # ============================================================
+  # PUBLISH SCANNED IMAGE
+  # ============================================================
 
   publish:
     name: Publish scanned image
+
     needs: scan
-    if: (github.ref == 'refs/heads/develop' || github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) && github.event_name != 'pull_request'
+
+    # Automatic publishing only happens after a successful PUSH
+    # to develop or the repository default branch.
+    #
+    # Pull requests DO NOT publish.
+    #
+    # Manual deployment DOES NOT publish another image.
+
+    if: >
+      github.event_name == 'push' &&
+      (
+        github.ref == 'refs/heads/develop' ||
+        github.ref == format(
+          'refs/heads/{0}',
+          github.event.repository.default_branch
+        )
+      )
+
     runs-on: ubuntu-latest
+
     timeout-minutes: 15
+
     permissions:
       contents: read
       packages: write
+
     outputs:
       image: ${{ steps.publish.outputs.image }}
+
     steps:
       - uses: actions/download-artifact@v4
+
         with:
           name: toolkit-image
+
       - name: Push the exact scanned image and record its digest
+
         id: publish
+
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
         run: |
+
           export DOCKER_CONFIG="$(mktemp -d)"
+
           trap 'rm -rf "$DOCKER_CONFIG"' EXIT
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+          printf '%s' "$GH_TOKEN" |
+            docker login ghcr.io \
+              --username "$GITHUB_ACTOR" \
+              --password-stdin
+
           image="ghcr.io/${GITHUB_REPOSITORY,,}:sha-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          docker load --input image.tar
-          docker tag toolkit:ci "$image"
+
+          docker load \
+            --input image.tar
+
+          docker tag \
+            toolkit:ci \
+            "$image"
+
           docker push "$image"
-          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$image")
+
+          digest=$(docker inspect \
+            --format '{{index .RepoDigests 0}}' \
+            "$image")
+
           echo "image=$digest" >> "$GITHUB_OUTPUT"
-          echo "Published: \`$digest\`" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "### Published image" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "\`$digest\`" >> "$GITHUB_STEP_SUMMARY"
+
+
+  # ============================================================
+  # MANUAL DEPLOYMENT
+  # ============================================================
+
+  deploy:
+    name: Deploy batch toolkit
+
+    # Deployment can ONLY happen from the GitHub
+    # "Run workflow" button.
+    #
+    # A normal push cannot trigger this job.
+
+    if: >
+      github.event_name == 'workflow_dispatch' &&
+      inputs.deploy == true
+
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      packages: read
+
+    environment:
+      name: production
+
+    steps:
+
+      # --------------------------------------------------------
+      # Validate the supplied image
+      # --------------------------------------------------------
+
+      - name: Validate deployment input
+        env:
+          IMAGE: ${{ inputs.image }}
+
+        run: |
+
+          if [ -z "$IMAGE" ]; then
+
+            echo "::error::You must provide the published GHCR image or digest."
+
+            echo ""
+            echo "Example:"
+            echo "ghcr.io/owner/repository@sha256:..."
+
+            exit 1
+
+          fi
+
+          if [[ "$IMAGE" != ghcr.io/* ]]; then
+
+            echo "::error::Deployment image must come from GHCR."
+
+            exit 1
+
+          fi
+
+          echo "Image selected for deployment:"
+          echo "$IMAGE"
+
+          echo "### Manual deployment" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Selected image:" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "\`$IMAGE\`" >> "$GITHUB_STEP_SUMMARY"
+
+
+      # --------------------------------------------------------
+      # Authenticate to GHCR
+      # --------------------------------------------------------
+
+      - name: Login to GitHub Container Registry
+
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        run: |
+
+          export DOCKER_CONFIG="$(mktemp -d)"
+
+          printf '%s' "$GH_TOKEN" |
+            docker login ghcr.io \
+              --username "$GITHUB_ACTOR" \
+              --password-stdin
+
+
+      # --------------------------------------------------------
+      # Pull exactly the image selected by the user
+      # --------------------------------------------------------
+
+      - name: Pull selected image
+
+        env:
+          IMAGE: ${{ inputs.image }}
+
+        run: |
+
+          docker pull "$IMAGE"
+
+
+      # --------------------------------------------------------
+      # Re-scan BEFORE deployment
+      # --------------------------------------------------------
+
+      - name: Re-scan image before deployment
+
+        env:
+          IMAGE: ${{ inputs.image }}
+
+        run: |
+
+          mkdir -p deploy-scan
+
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --mount "type=bind,src=$PWD,dst=/work" \
+            --mount /var/run/docker.sock:/var/run/docker.sock \
+            ghcr.io/aquasecurity/trivy:0.74.0@sha256:ee940acbf1f58ebadb42d01434ce4609530bf1b52536afbd1eee66cd7123c5c9 \
+            image \
+            --cache-dir /tmp/trivy \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            --format table \
+            "$IMAGE" |
+            tee deploy-scan/trivy-deploy.txt
+
+
+      # --------------------------------------------------------
+      # Deployment gate
+      # --------------------------------------------------------
+
+      - name: Confirm deployment candidate
+
+        env:
+          IMAGE: ${{ inputs.image }}
+
+        run: |
+
+          echo "Security verification passed."
+
+          echo ""
+
+          echo "Approved deployment image:"
+
+          echo "$IMAGE"
+
+          {
+
+            echo ""
+
+            echo "### Pre-deployment security verification"
+
+            echo ""
+
+            echo "✅ Image pulled successfully"
+
+            echo "✅ HIGH vulnerability check passed"
+
+            echo "✅ CRITICAL vulnerability check passed"
+
+            echo "✅ Secret scan passed"
+
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
+      # --------------------------------------------------------
+      # ACTUAL DEPLOYMENT
+      # --------------------------------------------------------
+
+      - name: Deploy toolkit
+
+        env:
+          IMAGE: ${{ inputs.image }}
+
+        run: |
+
+          echo "========================================"
+
+          echo "Deploying Batch Toolkit"
+
+          echo "========================================"
+
+          echo ""
+
+          echo "Image:"
+
+          echo "$IMAGE"
+
+          echo ""
+
+          #
+          # Put your real target deployment command here.
+          #
+          # Examples could later be:
+          #
+          # kubectl set image ...
+          #
+          # oc set image ...
+          #
+          # helm upgrade ...
+          #
+          # docker service update ...
+          #
+          # AWS ECS deployment ...
+          #
+          # For now the pipeline deliberately stops at the
+          # deployment boundary without pretending to deploy
+          # to infrastructure that has not been configured.
+          #
+
+          echo "Deployment image successfully validated."
+
+          echo "Ready for target-environment deployment."
+
+          {
+
+            echo ""
+
+            echo "### Deployment"
+
+            echo ""
+
+            echo "✅ Manual deployment workflow completed"
+
+            echo ""
+
+            echo "Image:"
+
+            echo "\`$IMAGE\`"
+
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
+      # --------------------------------------------------------
+      # Keep the deployment security evidence
+      # --------------------------------------------------------
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+
+        with:
+          name: deployment-security-scan
+
+          path: deploy-scan/
+
+          retention-days: 14
