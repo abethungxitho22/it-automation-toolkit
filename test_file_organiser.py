@@ -1,7 +1,7 @@
 import tempfile
 from pathlib import Path
 
-from file_organiser import (get_category, organise_files, unique_destination,
+from file_organiser import (get_category, organise_files,
                             check_missing_files, read_expected_files)
 
 

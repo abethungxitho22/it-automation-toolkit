@@ -1,5 +1,4 @@
 import csv
-from pathlib import Path
 
 REQUIRED_FIELDS = ["name", "email"]
 KEY_FIELD = "email"  # used to detect duplicate records

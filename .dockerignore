@@ -1,0 +1,15 @@
+**
+!Dockerfile
+!main.py
+!file_organiser.py
+!log_analyser.py
+!health_checker.py
+!data_validator.py
+!report_generator.py
+!system_setup.py
+!setup_config.json
+!sample.log
+!records.csv
+!expected_files.txt
+!test_data/
+!test_data/**
